@@ -37,7 +37,7 @@ class Receiver:
 
 
 class World:
-    def __init__(self, n_states: int, seed: int = 1701):
+    def __init__(self, n_states: int, seed: int = 42):
         self.n_states = n_states
         self.state = 0
         self.rng = np.random.RandomState(seed)
@@ -48,3 +48,38 @@ class World:
     
     def evaluate_action(self, action: int) -> int:
         return 1 if action == self.state else -1
+
+
+class Game :
+    def __init__(self, n_states: int, re_config, se_config ,seed: int = 42, eps: float = 1e-6):
+     self.world = World(n_states, seed=seed)
+     self.receiver = Receiver(n_messages=re_config[0], n_actions=re_config[1], eps=eps)
+     self.sender =  Sender(n_inputs=se_config[0], n_messages=se_config[1], eps=eps)
+
+    def train(self, eval_size, threshold):
+        eval_rewards =  0
+        epoch = 0
+        while True :
+
+            world_state = self.world.emit_state()
+            message = self.sender.send_message(world_state)
+            action = self.receiver.act(message)
+            reward = self.world.evaluate_action(action)
+            self.receiver.learn_from_feedback(reward)
+            self.sender.learn_from_feedback(reward)
+            eval_rewards += reward
+            epoch+=1
+
+            if epoch % eval_size == 0:
+                print(f'Epoch {epoch}, last {eval_size} epochs reward: {eval_rewards/eval_size}')
+                print(world_state, message, action, reward)
+                if abs(1-eval_rewards/eval_size) > threshold:
+                    eval_rewards = 0
+                else:
+                    break
+
+        print("Observation to message mapping:")
+        print(self.sender.message_weights.argmax(1))
+        print("Message to action mapping:")
+        print(self.receiver.action_weights.argmax(1))
+        
